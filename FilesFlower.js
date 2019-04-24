@@ -35,9 +35,15 @@ FilesFlower.prototype.update = function (rootPath) {
 
     this.svg.selectAll("text").remove();
     this.simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(this.links).id(d => d.name))
-        .force("charge", d3.forceManyBody().strength(-100))
-        .force("center", d3.forceCenter(this.w / 2, this.h / 2));
+        .force("link",
+            d3.forceLink(this.links)
+                .id(d => d.name))
+        .force("charge",
+            d3.forceManyBody()
+                .strength(-30)
+                .distanceMax(500))
+        .force("center",
+            d3.forceCenter(this.w / 2, this.h / 2));
 
     this.link = this.svg.append("g")
         .attr("stroke", "#999")
@@ -121,12 +127,7 @@ FilesFlower.prototype.click = function (d) {
         d._children = d.children;
         d.children = null;
         d.type = "dir";
-        let totalsize = 0;
-        for (let i = 0; i < d._children.length; i++) {
-            const e = d._children[i];
-            totalsize += e.filesize;
-        }
-        d.filesize = totalsize;
+        d.filesize = d.rawsize;
     } else {
         d.children = d._children;
         d._children = null;
@@ -161,6 +162,7 @@ FilesFlower.prototype.finder = function (path, parent) {
                 file.type = "dir";
                 let subfile = this.finder(fPath, file);
                 totalsize += file.filesize;
+                file.rawsize = file.filesize;
             }
             if (stats.isFile()) {
                 file.type = "file";
@@ -188,6 +190,7 @@ FilesFlower.prototype.findSync = function (startPath) {
 
     this.finder(startPath, root);
     root.maxsize = root.filesize;
+    root.rawsize = root.filesize;
     return root;
 }
 
@@ -223,7 +226,8 @@ FilesFlower.prototype.flatten = function (root) {
         if (node.parent != null) {
             links.push({
                 source: node.parent.name,
-                target: node.name
+                target: node.name,
+                len: (node.parent.size+node.size)/node.root.maxsize
             });
         }
         nodes.push(node);
