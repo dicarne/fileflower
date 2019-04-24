@@ -5,7 +5,7 @@ let d3 = require("d3")
 FilesFlower = function (selector, w, h) {
     this.w = w;
     this.h = h;
-    this.selector=selector;
+    this.selector = selector;
     d3.select(selector).selectAll("svg").remove();
 
     this.svg = d3.select(selector).append("svg:svg")
@@ -28,10 +28,7 @@ FilesFlower.prototype.update = function (rootPath) {
     d3.select(this.selector).selectAll("g").remove();
     if (rootPath)
         this.filestree = this.ScanFileSystem(rootPath);
-    console.log(this.filestree);
     const nodes = this.flatten(this.filestree);
-    console.log(this.links)
-    //const total = nodes.length || 1;
     if (nodes.length === 1) {
         this.links = [];
     }
@@ -56,7 +53,7 @@ FilesFlower.prototype.update = function (rootPath) {
         .selectAll("circle")
         .data(nodes)
         .join("circle")
-        .attr("r", 10)
+        .attr("r", sizec)
         .attr("fill", color)
         .call(this.drag(this.simulation))
         .on("click", this.click.bind(this));
@@ -73,12 +70,24 @@ FilesFlower.prototype.update = function (rootPath) {
     });
 
 }
+sizec = d => {
+    var r = d.filesize / d.root.maxsize;
+    return 5 + r * 200;
+}
 color = d => {
-    if(d.type == "dir"){
-        return "#66ccff";
-    }
-    if(d.type == "file"){
-        return "#223344"
+    if (d.root == d)
+        return "#CD7054";
+    switch (d.type) {
+        case "dir":
+            return "#9B30FF";
+        case "file":
+            return "#00CD66";
+        case "open_dir":
+            return "#EEB422";
+        case "root_dir":
+            return "#CD7054";
+        default:
+            break;
     }
 }
 FilesFlower.prototype.drag = function (simulation) {
@@ -111,9 +120,19 @@ FilesFlower.prototype.click = function (d) {
     if (d.children) {
         d._children = d.children;
         d.children = null;
+        d.type = "dir";
+        let totalsize = 0;
+        for (let i = 0; i < d._children.length; i++) {
+            const e = d._children[i];
+            totalsize += e.filesize;
+        }
+        d.filesize = totalsize;
     } else {
         d.children = d._children;
         d._children = null;
+        d.type = "open_dir";
+        d.filesize = 0;
+
     }
     this.update();
 };
@@ -126,13 +145,14 @@ FilesFlower.prototype.finder = function (path, parent) {
         let stats = fs.statSync(fPath);
         // 当前文件
         let file = {
-            name: val,
+            name: fPath,
             path: fPath,
-            size: stats.size,
+            filesize: stats.size,
             children: null,
             _children: [],
             error: false,
-            parent: parent
+            parent: parent,
+            root: parent.root
         };
         // 加入父节点
         parent._children.push(file);
@@ -140,18 +160,17 @@ FilesFlower.prototype.finder = function (path, parent) {
             if (stats.isDirectory()) {
                 file.type = "dir";
                 let subfile = this.finder(fPath, file);
-                file.size += subfile;
-                totalsize += file.size;
+                totalsize += file.filesize;
             }
             if (stats.isFile()) {
                 file.type = "file";
-                totalsize += file.size;
+                totalsize += file.filesize;
             }
         } catch{
             file.error = true;
         }
     });
-
+    parent.filesize = totalsize;
     return totalsize;
 }
 
@@ -163,10 +182,12 @@ FilesFlower.prototype.finder = function (path, parent) {
 FilesFlower.prototype.findSync = function (startPath) {
     let result = [];
     // 根节点
-    let root = { name: "root", path: startPath, children: null, _children: [], parent: null , type:"dir"}
+    let root = { name: startPath, path: startPath, children: null, _children: [], parent: null, type: "root_dir", filesize: 0 }
+    root.root = root;
     this.links = [];
 
     this.finder(startPath, root);
+    root.maxsize = root.filesize;
     return root;
 }
 
@@ -186,6 +207,7 @@ FilesFlower.prototype.try = function () {
 
 // 展开树
 FilesFlower.prototype.flatten = function (root) {
+    //this.max = 0;
     var nodes = [];
     var i = 0;
     this.links = [];
