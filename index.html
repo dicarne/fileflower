@@ -10,8 +10,8 @@
     <script src="FilesFlower.js"></script>
     <div id="d3canvas"></div>
     <script>
-        var ff = new FilesFlower();
-        ff.ScanFileSystem();
+        var ff = new FilesFlower("#d3canvas", 800, 800);
+        ff.update("C://bash");
     </script>
 </body>
 
