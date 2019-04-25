@@ -41,6 +41,15 @@ FilesFlower = function (selector, w, h) {
         .attr('width', w)
         .attr('height', h)
         .attr('id', 'rectcanvas');
+
+
+    this.loading = this.svg.append("svg:text")
+        .attr('id', 'loading')
+        .attr('dx', w / 2)
+        .attr('dy', h * 0.8)
+        .attr('text-anchor', 'middle')
+        .text("loading")
+
     this.filestree = {};
     this.node = {};
     this.link = {};
@@ -68,10 +77,19 @@ FilesFlower.prototype.resize = function (w, h) {
     this.update(null);
 }
 
-FilesFlower.prototype.update = function (rootPath) {
+FilesFlower.prototype.update = async function (rootPath) {
+    this.loading
+        .attr('transform', 'translate(' + this.w / 2 + ',' + this.h / 2 + ')')
+        .style('display', null);
+
     d3.select(this.selector).selectAll("g").remove();
     if (rootPath)
-        this.filestree = this.ScanFileSystem(rootPath);
+        this.filestree = await this.ScanFileSystem(rootPath);
+
+    this.loading
+        .style('display', 'none');
+
+    console.log("continue");
     const nodes = this.flatten(this.filestree);
     if (nodes.length === 1) {
         this.links = [];
@@ -97,7 +115,6 @@ FilesFlower.prototype.update = function (rootPath) {
         .selectAll("line")
         .data(this.links)
         .join("line")
-    //.attr("stroke-width", d => Math.sqrt(d.value));
 
     this.node = this.svg.append("g")
         .attr("stroke", "#fff")
@@ -130,6 +147,14 @@ FilesFlower.prototype.update = function (rootPath) {
         .attr('dx', 0)
         .attr('text-anchor', 'middle');
 
+    this.loading = this.svg.append("svg:text")
+        .attr('id', 'loading')
+        .attr('dx', this.w / 2)
+        .attr('dy', this.h * 0.8)
+        .attr('text-anchor', 'middle')
+        .text("loading")
+        .style('display', 'none')
+
 }
 sizec = d => {
     var r = d.filesize / d.root.maxsize;
@@ -150,6 +175,8 @@ color = d => {
         default:
             break;
     }
+    if (d.error)
+        return "#f00";
 }
 FilesFlower.prototype.drag = function (simulation) {
 
@@ -194,12 +221,25 @@ FilesFlower.prototype.click = function (d) {
     this.update();
 };
 
+
+
 FilesFlower.prototype.finder = function (path, parent) {
-    let files = fs.readdirSync(path);
+    try {
+        var files = fs.readdirSync(path);
+    } catch{
+        files = [];
+    }
+
     var totalsize = 0;
-    files.forEach((val, index) => {
+    for (let index = 0; index < files.length; index++) {
+        const val = files[index];
         let fPath = join(path, val);
-        let stats = fs.statSync(fPath);
+        try {
+            var stats = fs.statSync(fPath);
+        } catch{
+            stats.size = 0;
+        }
+
         // 当前文件
         let file = {
             name: fPath,
@@ -228,7 +268,8 @@ FilesFlower.prototype.finder = function (path, parent) {
         } catch{
             file.error = true;
         }
-    });
+    }
+
     parent.filesize = totalsize;
     parent.rawsize = totalsize;
     return totalsize;
@@ -240,6 +281,7 @@ FilesFlower.prototype.finder = function (path, parent) {
    * @returns {Array}
    */
 FilesFlower.prototype.findSync = function (startPath) {
+
     let result = [];
     // 根节点
     let root = { name: startPath, path: startPath, purename: startPath, children: null, _children: [], parent: null, type: "root_dir", filesize: 0, distance: 0 }
@@ -249,6 +291,7 @@ FilesFlower.prototype.findSync = function (startPath) {
     this.finder(startPath, root);
     root.maxsize = root.filesize;
     root.rawsize = root.filesize;
+
     return root;
 }
 
@@ -256,9 +299,15 @@ FilesFlower.prototype.findSync = function (startPath) {
  * 根据根目录扫描文件系统
  */
 FilesFlower.prototype.ScanFileSystem = function (path) {
+    console.log("start scan");
 
     let fileNames = this.findSync(path);
-    return fileNames;
+
+    console.log("end scan");
+    return new Promise((resolve) => {
+        resolve(fileNames);
+    })
+    //return fileNames;
 }
 
 // 展开树
