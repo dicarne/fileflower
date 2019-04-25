@@ -83,14 +83,17 @@ FilesFlower.prototype.update = async function (rootPath) {
         .style('display', null);
 
     d3.select(this.selector).selectAll("g").remove();
-    if (rootPath)
+    if (rootPath || this.checklist.length > 0) {
+        if (rootPath)
+            this.Clear(rootPath);
         this.filestree = await this.ScanFileSystem(rootPath);
+    }
 
     this.loading
         .style('display', 'none');
 
-    console.log("continue");
     const nodes = this.flatten(this.filestree);
+    //console.log(this.checklist)
     if (nodes.length === 1) {
         this.links = [];
     }
@@ -130,14 +133,21 @@ FilesFlower.prototype.update = async function (rootPath) {
         .on("mouseout", this.mouseout.bind(this));
 
     this.simulation.on("tick", () => {
-        this.link
-            .attr("x1", d => d.source.x)
-            .attr("y1", d => d.source.y)
-            .attr("x2", d => d.target.x)
-            .attr("y2", d => d.target.y);
-        this.node
-            .attr("cx", d => d.x)
-            .attr("cy", d => d.y)
+        if (this.simulation.alpha() <= 0.05 || this.simulation.alpha() >= 0.95) {  // 足够稳定时，才渲染一次
+            this.link
+                .attr("x1", function (d) { return d.source.x; })
+                .attr("y1", function (d) { return d.source.y; })
+                .attr("x2", function (d) { return d.target.x; })
+                .attr("y2", function (d) { return d.target.y; });
+            this.node
+                .attr("cx", function (d) { return d.x; })
+                .attr("cy", function (d) { return d.y; });
+
+            if (this.simulation.alpha() <= 0.05)
+                this.simulation.stop();
+            console.log("randing")
+        }
+
     });
 
     this.text = this.svg
@@ -155,9 +165,18 @@ FilesFlower.prototype.update = async function (rootPath) {
         .text("loading")
         .style('display', 'none')
 
+    if (this.checklist.length > 0) {
+        setTimeout(() => {
+            this.update();
+
+        }, 1000);
+    }
+
 }
 sizec = d => {
-    var r = d.filesize / d.root.maxsize;
+    //if (!d.filesize || !d.root || !d.root.rawsize)
+    //    console.log(d)
+    var r = d.filesize / (d.root.rawsize + 1);
     return 5 + r * 200;
 }
 color = d => {
@@ -221,9 +240,48 @@ FilesFlower.prototype.click = function (d) {
     this.update();
 };
 
+FilesFlower.prototype.readFile = function (file, parent) {
+    try {
+        var stats = fs.statSync(file.path);
+        this.readcount++;
+    } catch{
+        stats.size = 0;
+    }
+    file.filesize = stats.size;
+    file.rawsize = file.filesize;
+    file.read = true;
 
-
+    // 加入父节点
+    parent._children.push(file);
+    try {
+        if (stats.isDirectory()) {
+            file.type = "dir";
+            //let subfile = this.finder(fPath, file);
+            //totalsize += file.filesize;
+            file.rawsize = 0;
+        }
+        if (stats.isFile()) {
+            file.type = "file";
+            totalsize += file.filesize;
+            file.rawsize = file.filesize;
+        }
+    } catch{
+        file.error = true;
+    }
+    let troot = file;
+    while (troot != this.root) {
+        troot.parent.rawsize += file.rawsize;
+        if (troot.parent.type != "open_dir") {
+            troot.parent.filesize = troot.parent.rawsize;
+        }
+        troot = troot.parent;
+    }
+}
+var maxcount = 80;
 FilesFlower.prototype.finder = function (path, parent) {
+    if (!parent.read && parent.parent) {
+        this.readFile(parent, parent.parent);
+    }
     try {
         var files = fs.readdirSync(path);
     } catch{
@@ -234,40 +292,24 @@ FilesFlower.prototype.finder = function (path, parent) {
     for (let index = 0; index < files.length; index++) {
         const val = files[index];
         let fPath = join(path, val);
-        try {
-            var stats = fs.statSync(fPath);
-        } catch{
-            stats.size = 0;
-        }
-
-        // 当前文件
         let file = {
             name: fPath,
             path: fPath,
-            filesize: stats.size,
             children: null,
             _children: [],
             error: false,
             parent: parent,
             root: parent.root,
-            purename: val
+            purename: val,
+            read: false
         };
-        // 加入父节点
-        parent._children.push(file);
-        try {
-            if (stats.isDirectory()) {
-                file.type = "dir";
-                let subfile = this.finder(fPath, file);
-                totalsize += file.filesize;
-            }
-            if (stats.isFile()) {
-                file.type = "file";
-                totalsize += file.filesize;
-                file.rawsize = file.filesize;
-            }
-        } catch{
-            file.error = true;
+
+        if (this.readcount < maxcount) {
+            this.readFile(file, parent);
         }
+
+        this.newchecklist.push(file);
+
     }
 
     parent.filesize = totalsize;
@@ -280,34 +322,70 @@ FilesFlower.prototype.finder = function (path, parent) {
    * @param startPath  起始目录文件夹路径
    * @returns {Array}
    */
-FilesFlower.prototype.findSync = function (startPath) {
+FilesFlower.prototype.findSync = function () {
+    let len = this.checklist.length;
+    this.newchecklist = [];
+    this.readcount = 0;
 
-    let result = [];
-    // 根节点
-    let root = { name: startPath, path: startPath, purename: startPath, children: null, _children: [], parent: null, type: "root_dir", filesize: 0, distance: 0 }
-    root.root = root;
-    this.links = [];
+    for (let index = 0; index < len && index < maxcount; index++) {
+        const element = this.checklist[index];
 
-    this.finder(startPath, root);
-    root.maxsize = root.filesize;
-    root.rawsize = root.filesize;
+        if (this.checklist.length - len > maxcount)
+            break;
+        if (element != null && element != undefined) {
+            if (element.type == "file") {
+                this.comfiremlist.push(element);
+                continue;
+            }
+            this.finder(element.path, element);
+            this.comfiremlist.push(element);
+        }
 
-    return root;
+    }
+    let remainlist = [];
+    for (let remain = maxcount; remain < len; remain++) {
+        const element = this.checklist[remain];
+        remainlist.push(element);
+    }
+
+    this.checklist = remainlist.concat(this.newchecklist);
+    this.newchecklist = null;
+    return this.root;
 }
 
 /**
  * 根据根目录扫描文件系统
  */
 FilesFlower.prototype.ScanFileSystem = function (path) {
-    console.log("start scan");
-
-    let fileNames = this.findSync(path);
-
-    console.log("end scan");
+    let fileNames = this.findSync();
     return new Promise((resolve) => {
         resolve(fileNames);
     })
-    //return fileNames;
+}
+
+FilesFlower.prototype.Clear = function (startPath) {
+    this.checklist = [];
+    this.comfiremlist = [];
+    this.links = [];
+    if (startPath) {
+        var root = {
+            name: startPath,
+            path: startPath,
+            purename: startPath,
+            children: null,
+            _children: [],
+            type: "root_dir",
+            filesize: 0,
+            rawsize: 0,
+            distance: 0,
+            read: true
+        };
+        root.root = root;
+        root.parent = root;
+        this.root = root;
+        this.checklist.push(root)
+    }
+
 }
 
 // 展开树
@@ -329,10 +407,10 @@ FilesFlower.prototype.flatten = function (root) {
             links.push({
                 source: node.parent.name,
                 target: node.name,
-                distance: (node.parent.filesize + node.filesize) / node.root.maxsize * 200 + 30
+                distance: (node.parent.filesize + node.filesize) / node.root.rawsize * 200 + 30
             });
         }
-        node.rsize = node.filesize / node.root.maxsize * 200 + 30
+        node.rsize = node.filesize / node.root.rawsize * 200 + 30
         nodes.push(node);
         return node.size;
     }
@@ -364,3 +442,4 @@ FilesFlower.prototype.mouseover = function (d) {
 FilesFlower.prototype.mouseout = function (d) {
     this.text.style('display', 'none');
 };
+
