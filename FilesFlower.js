@@ -37,7 +37,9 @@ FilesFlower.prototype.update = function (rootPath) {
     this.simulation = d3.forceSimulation(nodes)
         .force("link",
             d3.forceLink(this.links)
-                .id(d => d.name))
+                .id(d => d.name)
+                .distance(d => d.distance)
+        )
         .force("charge",
             d3.forceManyBody()
                 .strength(-30)
@@ -62,7 +64,9 @@ FilesFlower.prototype.update = function (rootPath) {
         .attr("r", sizec)
         .attr("fill", color)
         .call(this.drag(this.simulation))
-        .on("click", this.click.bind(this));
+        .on("click", this.click.bind(this))
+        .on("mouseover", this.mouseover.bind(this))
+        .on("mouseout", this.mouseout.bind(this));
 
     this.simulation.on("tick", () => {
         this.link
@@ -74,6 +78,12 @@ FilesFlower.prototype.update = function (rootPath) {
             .attr("cx", d => d.x)
             .attr("cy", d => d.y)
     });
+
+    this.text = this.svg.append('svg:text')
+        .attr('class', 'nodetext')
+        .attr('dy', 0)
+        .attr('dx', 0)
+        .attr('text-anchor', 'middle');
 
 }
 sizec = d => {
@@ -153,7 +163,8 @@ FilesFlower.prototype.finder = function (path, parent) {
             _children: [],
             error: false,
             parent: parent,
-            root: parent.root
+            root: parent.root,
+            purename: val
         };
         // 加入父节点
         parent._children.push(file);
@@ -162,17 +173,18 @@ FilesFlower.prototype.finder = function (path, parent) {
                 file.type = "dir";
                 let subfile = this.finder(fPath, file);
                 totalsize += file.filesize;
-                file.rawsize = file.filesize;
             }
             if (stats.isFile()) {
                 file.type = "file";
                 totalsize += file.filesize;
+                file.rawsize = file.filesize;
             }
         } catch{
             file.error = true;
         }
     });
     parent.filesize = totalsize;
+    parent.rawsize = totalsize;
     return totalsize;
 }
 
@@ -184,7 +196,7 @@ FilesFlower.prototype.finder = function (path, parent) {
 FilesFlower.prototype.findSync = function (startPath) {
     let result = [];
     // 根节点
-    let root = { name: startPath, path: startPath, children: null, _children: [], parent: null, type: "root_dir", filesize: 0 }
+    let root = { name: startPath, path: startPath, purename: startPath, children: null, _children: [], parent: null, type: "root_dir", filesize: 0, distance: 0 }
     root.root = root;
     this.links = [];
 
@@ -202,11 +214,6 @@ FilesFlower.prototype.ScanFileSystem = function (path) {
     let fileNames = this.findSync(path);
     return fileNames;
 }
-
-FilesFlower.prototype.try = function () {
-    this.ScanFileSystem('C://bash');
-}
-
 
 // 展开树
 FilesFlower.prototype.flatten = function (root) {
@@ -227,9 +234,10 @@ FilesFlower.prototype.flatten = function (root) {
             links.push({
                 source: node.parent.name,
                 target: node.name,
-                len: (node.parent.size+node.size)/node.root.maxsize
+                distance: (node.parent.filesize + node.filesize) / node.root.maxsize * 200 + 30
             });
         }
+        node.rsize = node.filesize / node.root.maxsize * 200 + 30
         nodes.push(node);
         return node.size;
     }
@@ -237,3 +245,26 @@ FilesFlower.prototype.flatten = function (root) {
     root.size = recurse(root, nodes, this.links);
     return nodes;
 }
+const kb = 1024;
+const mb = 1024 * 1024;
+const gb = 1014 * 1024 * 1024;
+
+function filesize2str(filesize) {
+    if (filesize < kb)
+        return filesize + " B";
+    else if (filesize < mb)
+        return (filesize / kb).toFixed(2) + " KB";
+    else if (filesize < gb)
+        return (filesize / mb).toFixed(2) + " MB"
+    else return (filesize / gb).toFixed(2) + " GB"
+}
+
+FilesFlower.prototype.mouseover = function (d) {
+    this.text.attr('transform', 'translate(' + d.x + ',' + (d.y - 5 - (d.children ? 3.5 : Math.sqrt(d.rsize) / 2)) + ')')
+        .text(d.name + ": " + filesize2str(d.filesize) + " loc")
+        .style('display', null);
+};
+
+FilesFlower.prototype.mouseout = function (d) {
+    this.text.style('display', 'none');
+};
