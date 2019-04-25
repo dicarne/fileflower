@@ -1,6 +1,28 @@
-var fs = require("fs")
+let fs = require("fs");
 let join = require('path').join;
-let d3 = require("d3")
+let d3 = require("d3");
+const shell = require("electron").shell;
+const os = require("os");
+
+const { remote } = require("electron");
+const { Menu, MenuItem } = remote;
+let current;
+
+//右键菜单
+const menu = new Menu();
+menu.append(new MenuItem({
+    label: 'open in explorer',
+    click: function () {
+        if (current) {
+            shell.showItemInFolder(current);
+        }
+    }
+}));
+
+window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    menu.popup({ window: remote.getCurrentWindow() })
+}, false);
 
 FilesFlower = function (selector, w, h) {
     this.w = w;
@@ -10,19 +32,41 @@ FilesFlower = function (selector, w, h) {
 
     this.svg = d3.select(selector).append("svg:svg")
         .attr('width', w)
-        .attr('height', h);
+        .attr('height', h)
+        .attr('id', 'svgcanvas');
 
     this.svg.append("svg:rect")
         .style("stroke", "#999")
         .style("fill", "#fff")
         .attr('width', w)
-        .attr('height', h);
+        .attr('height', h)
+        .attr('id', 'rectcanvas');
     this.filestree = {};
     this.node = {};
     this.link = {};
 }
 
 module.exports = FilesFlower
+
+FilesFlower.prototype.resize = function (w, h) {
+    this.w = w;
+    this.h = h;
+
+    d3.select(this.selector).selectAll("svg").remove();
+
+    this.svg = d3.select(this.selector).append("svg:svg")
+        .attr('width', w)
+        .attr('height', h)
+        .attr('id', 'svgcanvas');
+
+    this.svg.append("svg:rect")
+        .style("stroke", "#999")
+        .style("fill", "#fff")
+        .attr('width', w)
+        .attr('height', h)
+        .attr('id', 'rectcanvas');
+    this.update(null);
+}
 
 FilesFlower.prototype.update = function (rootPath) {
     d3.select(this.selector).selectAll("g").remove();
@@ -79,7 +123,8 @@ FilesFlower.prototype.update = function (rootPath) {
             .attr("cy", d => d.y)
     });
 
-    this.text = this.svg.append('svg:text')
+    this.text = this.svg
+        .append('svg:text')
         .attr('class', 'nodetext')
         .attr('dy', 0)
         .attr('dx', 0)
@@ -132,7 +177,8 @@ FilesFlower.prototype.drag = function (simulation) {
 }
 
 FilesFlower.prototype.click = function (d) {
-
+    if (d.type == "file")
+        return;
     if (d.children) {
         d._children = d.children;
         d.children = null;
@@ -261,8 +307,9 @@ function filesize2str(filesize) {
 
 FilesFlower.prototype.mouseover = function (d) {
     this.text.attr('transform', 'translate(' + d.x + ',' + (d.y - 5 - (d.children ? 3.5 : Math.sqrt(d.rsize) / 2)) + ')')
-        .text(d.name + ": " + filesize2str(d.filesize) + " loc")
+        .text(d.name + ": " + filesize2str(d.filesize))
         .style('display', null);
+    current = d.name;
 };
 
 FilesFlower.prototype.mouseout = function (d) {
