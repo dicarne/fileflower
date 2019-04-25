@@ -9,16 +9,19 @@
 
 <body>
     <script src="FilesFlower.js"></script>
-    <div id="d3canvas"></div>
+    <div id="d3canvas">
+
+    </div>
     <script>
         var canvas = document.getElementById("d3canvas");
         var ff = new FilesFlower("#d3canvas", document.documentElement.clientWidth - 10, document.documentElement.clientHeight - 20);
         window.onresize = function () {
             ff.resize(document.documentElement.clientWidth - 10, document.documentElement.clientHeight - 20);
         }
-        setTimeout(()=>{
-            ff.update("C:\\unity");
-        },1000)
+        ff.selectFile()
+        //setTimeout(()=>{
+        //    ff.update("C:\\unity");
+        //},1000)
         
     </script>
 </body>

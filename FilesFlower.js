@@ -54,35 +54,48 @@ FilesFlower = function (selector, w, h) {
     this.node = {};
     this.link = {};
 }
+const { dialog } = require('electron').remote
+/**
+ * 选择查询的目录
+ */
+FilesFlower.prototype.selectFile = function(){
+    
+    var files = dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'] });
+    this.update(files[0])
+}
 
 module.exports = FilesFlower
 
+/**
+ * 改变窗口大小
+ */
 FilesFlower.prototype.resize = function (w, h) {
     this.w = w;
     this.h = h;
 
     d3.select(this.selector).selectAll("svg").remove();
 
-    this.svg = d3.select(this.selector).append("svg:svg")
+    this.svg = d3.select("#id")
         .attr('width', w)
         .attr('height', h)
-        .attr('id', 'svgcanvas');
 
-    this.svg.append("svg:rect")
-        .style("stroke", "#999")
-        .style("fill", "#fff")
+    d3.select("#rectcanvas")
         .attr('width', w)
         .attr('height', h)
         .attr('id', 'rectcanvas');
+
     this.update(null);
 }
 
+/**
+ * 更新
+ */
 FilesFlower.prototype.update = async function (rootPath) {
     this.loading
         .attr('transform', 'translate(' + this.w / 2 + ',' + this.h / 2 + ')')
         .style('display', null);
 
-    d3.select(this.selector).selectAll("g").remove();
+    //d3.select(this.selector).selectAll("g").remove();
     if (rootPath || this.checklist.length > 0) {
         if (rootPath)
             this.Clear(rootPath);
@@ -110,18 +123,16 @@ FilesFlower.prototype.update = async function (rootPath) {
                 .strength(-30)
                 .distanceMax(500))
         .force("center",
-            d3.forceCenter(this.w / 2, this.h / 2));
+            d3.forceCenter(this.w / 2, this.h / 2))
 
-    this.link = this.svg.append("g")
-        .attr("stroke", "#999")
-        .attr("stroke-opacity", 0.6)
+    this.link = this.svg
         .selectAll("line")
         .data(this.links)
         .join("line")
+        .attr("stroke", "#999")
+        .attr("stroke-opacity", 0.6)
 
-    this.node = this.svg.append("g")
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 1.5)
+    this.node = this.svg
         .selectAll("circle")
         .data(nodes)
         .join("circle")
@@ -130,10 +141,12 @@ FilesFlower.prototype.update = async function (rootPath) {
         .call(this.drag(this.simulation))
         .on("click", this.click.bind(this))
         .on("mouseover", this.mouseover.bind(this))
-        .on("mouseout", this.mouseout.bind(this));
+        .on("mouseout", this.mouseout.bind(this))
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1.5)
 
     this.simulation.on("tick", () => {
-        if (this.simulation.alpha() <= 0.05 || this.simulation.alpha() >= 0.95) {  // 足够稳定时，才渲染一次
+        //if (this.simulation.alpha() <= 0.5 || this.simulation.alpha() >= 0.95) {  // 足够稳定时，才渲染一次
             this.link
                 .attr("x1", function (d) { return d.source.x; })
                 .attr("y1", function (d) { return d.source.y; })
@@ -143,10 +156,9 @@ FilesFlower.prototype.update = async function (rootPath) {
                 .attr("cx", function (d) { return d.x; })
                 .attr("cy", function (d) { return d.y; });
 
-            if (this.simulation.alpha() <= 0.05)
-                this.simulation.stop();
-            console.log("randing")
-        }
+        //    if (this.simulation.alpha() <= 0.05)
+        //        this.simulation.stop();
+        //}
 
     });
 
@@ -173,12 +185,14 @@ FilesFlower.prototype.update = async function (rootPath) {
     }
 
 }
+
 sizec = d => {
     //if (!d.filesize || !d.root || !d.root.rawsize)
     //    console.log(d)
     var r = d.filesize / (d.root.rawsize + 1);
     return 5 + r * 200;
 }
+
 color = d => {
     if (d.root == d)
         return "#CD7054";
@@ -197,6 +211,9 @@ color = d => {
     if (d.error)
         return "#f00";
 }
+/**
+ * 拖动
+ */
 FilesFlower.prototype.drag = function (simulation) {
 
     function dragstarted(d) {
@@ -222,6 +239,9 @@ FilesFlower.prototype.drag = function (simulation) {
         .on("end", dragended);
 }
 
+/**
+ * 点击
+ */
 FilesFlower.prototype.click = function (d) {
     if (d.type == "file")
         return;
@@ -240,6 +260,9 @@ FilesFlower.prototype.click = function (d) {
     this.update();
 };
 
+/**
+ * 读取文件信息
+ */
 FilesFlower.prototype.readFile = function (file, parent) {
     try {
         var stats = fs.statSync(file.path);
@@ -277,7 +300,13 @@ FilesFlower.prototype.readFile = function (file, parent) {
         troot = troot.parent;
     }
 }
-var maxcount = 80;
+/**
+ * 最大同时读取文件数
+ */
+var maxcount = 30;
+/**
+ * 查找目录下的文件
+ */
 FilesFlower.prototype.finder = function (path, parent) {
     if (!parent.read && parent.parent) {
         this.readFile(parent, parent.parent);
@@ -319,8 +348,8 @@ FilesFlower.prototype.finder = function (path, parent) {
 
 /**
    * 
-   * @param startPath  起始目录文件夹路径
-   * @returns {Array}
+   *  起始目录文件夹路径
+   * 
    */
 FilesFlower.prototype.findSync = function () {
     let len = this.checklist.length;
@@ -388,7 +417,9 @@ FilesFlower.prototype.Clear = function (startPath) {
 
 }
 
-// 展开树
+/**
+ * 展开树
+ *  */ 
 FilesFlower.prototype.flatten = function (root) {
     //this.max = 0;
     var nodes = [];
