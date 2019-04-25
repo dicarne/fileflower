@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <title>FilesFlower</title>
+    <style>
+    </style>
+</head>
+
+<body>
+    <script src="FilesFlower.js"></script>
+    <div id="d3canvas">
+
+    </div>
+    <script>
+        var canvas = document.getElementById("d3canvas");
+        var ff = new FilesFlower("#d3canvas", document.documentElement.clientWidth - 10, document.documentElement.clientHeight - 20);
+        window.onresize = function () {
+            ff.resize(document.documentElement.clientWidth - 10, document.documentElement.clientHeight - 20);
+        }
+        ff.selectFile()
+        
+    </script>
+</body>
+
+</html>

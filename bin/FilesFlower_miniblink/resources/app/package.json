@@ -1,0 +1,25 @@
+{
+  "name": "filesflower",
+  "version": "1.0.0",
+  "description": "A files explorer",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dicarne/fileflower.git"
+  },
+  "author": "Dicarne",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dicarne/fileflower/issues"
+  },
+  "homepage": "https://github.com/dicarne/fileflower#readme",
+  "devDependencies": {
+    "electron": "^4.1.4"
+  },
+  "dependencies": {
+    "d3": "^5.9.2"
+  }
+}

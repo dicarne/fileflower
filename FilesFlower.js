@@ -58,9 +58,10 @@ const { dialog } = require('electron').remote
 /**
  * 选择查询的目录
  */
-FilesFlower.prototype.selectFile = function(){
-    
+FilesFlower.prototype.selectFile = function () {
+
     var files = dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'] });
+    console.log(files[0])
     this.update(files[0])
 }
 
@@ -73,16 +74,13 @@ FilesFlower.prototype.resize = function (w, h) {
     this.w = w;
     this.h = h;
 
-    d3.select(this.selector).selectAll("svg").remove();
-
-    this.svg = d3.select("#id")
+    d3.select("#svgcanvas")
         .attr('width', w)
         .attr('height', h)
 
     d3.select("#rectcanvas")
         .attr('width', w)
         .attr('height', h)
-        .attr('id', 'rectcanvas');
 
     this.update(null);
 }
@@ -90,7 +88,8 @@ FilesFlower.prototype.resize = function (w, h) {
 /**
  * 更新
  */
-FilesFlower.prototype.update = async function (rootPath) {
+FilesFlower.prototype.update = function (rootPath) {
+    this.running = true;
     this.loading
         .attr('transform', 'translate(' + this.w / 2 + ',' + this.h / 2 + ')')
         .style('display', null);
@@ -99,14 +98,13 @@ FilesFlower.prototype.update = async function (rootPath) {
     if (rootPath || this.checklist.length > 0) {
         if (rootPath)
             this.Clear(rootPath);
-        this.filestree = await this.ScanFileSystem(rootPath);
+        this.filestree = this.ScanFileSystem(rootPath);
     }
 
     this.loading
         .style('display', 'none');
 
     const nodes = this.flatten(this.filestree);
-    //console.log(this.checklist)
     if (nodes.length === 1) {
         this.links = [];
     }
@@ -147,14 +145,14 @@ FilesFlower.prototype.update = async function (rootPath) {
 
     this.simulation.on("tick", () => {
         //if (this.simulation.alpha() <= 0.5 || this.simulation.alpha() >= 0.95) {  // 足够稳定时，才渲染一次
-            this.link
-                .attr("x1", function (d) { return d.source.x; })
-                .attr("y1", function (d) { return d.source.y; })
-                .attr("x2", function (d) { return d.target.x; })
-                .attr("y2", function (d) { return d.target.y; });
-            this.node
-                .attr("cx", function (d) { return d.x; })
-                .attr("cy", function (d) { return d.y; });
+        this.link
+            .attr("x1", function (d) { return d.source.x; })
+            .attr("y1", function (d) { return d.source.y; })
+            .attr("x2", function (d) { return d.target.x; })
+            .attr("y2", function (d) { return d.target.y; });
+        this.node
+            .attr("cx", function (d) { return d.x; })
+            .attr("cy", function (d) { return d.y; });
 
         //    if (this.simulation.alpha() <= 0.05)
         //        this.simulation.stop();
@@ -176,11 +174,10 @@ FilesFlower.prototype.update = async function (rootPath) {
         .attr('text-anchor', 'middle')
         .text("loading")
         .style('display', 'none')
-
+    this.running = false;
     if (this.checklist.length > 0) {
         setTimeout(() => {
             this.update();
-
         }, 1000);
     }
 
@@ -267,30 +264,41 @@ FilesFlower.prototype.readFile = function (file, parent) {
     try {
         var stats = fs.statSync(file.path);
         this.readcount++;
-    } catch{
+    } catch (e) {
+        var stats = {}
         stats.size = 0;
+    } finally {
+
     }
+
+
+
     file.filesize = stats.size;
     file.rawsize = file.filesize;
     file.read = true;
 
     // 加入父节点
-    parent._children.push(file);
+    if (parent._children)
+        parent._children.push(file);
+    if (parent.children)
+        parent.children.push(file);
     try {
         if (stats.isDirectory()) {
             file.type = "dir";
             //let subfile = this.finder(fPath, file);
-            //totalsize += file.filesize;
             file.rawsize = 0;
         }
         if (stats.isFile()) {
             file.type = "file";
-            totalsize += file.filesize;
             file.rawsize = file.filesize;
         }
-    } catch{
-        file.error = true;
+    } catch (e) {
+
+    } finally {
+
     }
+
+
     let troot = file;
     while (troot != this.root) {
         troot.parent.rawsize += file.rawsize;
@@ -313,9 +321,13 @@ FilesFlower.prototype.finder = function (path, parent) {
     }
     try {
         var files = fs.readdirSync(path);
-    } catch{
+    } catch (e) {
         files = [];
+    } finally {
+
     }
+
+
 
     var totalsize = 0;
     for (let index = 0; index < files.length; index++) {
@@ -387,9 +399,8 @@ FilesFlower.prototype.findSync = function () {
  */
 FilesFlower.prototype.ScanFileSystem = function (path) {
     let fileNames = this.findSync();
-    return new Promise((resolve) => {
-        resolve(fileNames);
-    })
+    return fileNames;
+
 }
 
 FilesFlower.prototype.Clear = function (startPath) {
@@ -419,7 +430,7 @@ FilesFlower.prototype.Clear = function (startPath) {
 
 /**
  * 展开树
- *  */ 
+ *  */
 FilesFlower.prototype.flatten = function (root) {
     //this.max = 0;
     var nodes = [];

@@ -4,7 +4,8 @@
   "description": "A files explorer",
   "main": "index.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "package": "electron-packager . FilesFlower --win --out ../FilesFlower --arch=x64 --app-version=1.0.0 --electron-version=4.1.4"
   },
   "repository": {
     "type": "git",
